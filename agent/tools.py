@@ -5,14 +5,21 @@ from typing import Tuple
 from langchain_core.tools import tool
 
 PROJECT_ROOT = pathlib.Path.cwd() / "generated_project"
+CURRENT_JOB = None
 
+def set_job_root(job_id: str):
+    global CURRENT_JOB
+    CURRENT_JOB = PROJECT_ROOT / job_id
+    CURRENT_JOB.mkdir(parents=True, exist_ok=True)
 
 def safe_path_for_project(path: str) -> pathlib.Path:
-    p = (PROJECT_ROOT / path).resolve()
-    if PROJECT_ROOT.resolve() not in p.parents and PROJECT_ROOT.resolve() != p.parent and PROJECT_ROOT.resolve() != p:
-        raise ValueError("Attempt to write outside project root")
-    return p
+    root = CURRENT_JOB if CURRENT_JOB else PROJECT_ROOT
+    p = (root / path).resolve()
 
+    if root.resolve() not in p.parents and root.resolve() != p.parent and root.resolve() != p:
+        raise ValueError("Attempt to write outside project root")
+
+    return p
 
 @tool
 def write_file(path: str, content: str) -> str:
@@ -36,9 +43,9 @@ def read_file(path: str) -> str:
 
 @tool
 def get_current_directory() -> str:
-    """Returns the current working directory."""
-    return str(PROJECT_ROOT)
-
+    """Returns the current project directory."""
+    root = CURRENT_JOB if CURRENT_JOB else PROJECT_ROOT
+    return str(root)
 
 @tool
 def list_files(directory: str = ".") -> str:
@@ -52,7 +59,8 @@ def list_files(directory: str = ".") -> str:
 @tool
 def run_cmd(cmd: str, cwd: str = None, timeout: int = 30) -> Tuple[int, str, str]:
     """Runs a shell command in the specified directory and returns the result."""
-    cwd_dir = safe_path_for_project(cwd) if cwd else PROJECT_ROOT
+    root = CURRENT_JOB if CURRENT_JOB else PROJECT_ROOT
+    cwd_dir = safe_path_for_project(cwd) if cwd else root
     res = subprocess.run(cmd, shell=True, cwd=str(cwd_dir), capture_output=True, text=True, timeout=timeout)
     return res.returncode, res.stdout, res.stderr
 
