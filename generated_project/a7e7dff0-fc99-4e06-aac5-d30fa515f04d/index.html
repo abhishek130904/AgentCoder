@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="calculator" id="calculator">
+        <input type="text" id="display" class="display" aria-label="Calculator display" readonly />
+        <div class="buttons" id="buttons">
+            <!-- Row 1 -->
+            <button id="btn-ac" class="btn clear" data-key="AC" aria-label="All Clear">AC</button>
+            <button id="btn-c" class="btn clear" data-key="C" aria-label="Clear">C</button>
+            <button id="btn-percent" class="btn operator" data-key="%" aria-label="Percent">%</button>
+            <button id="btn-divide" class="btn operator" data-key="/" aria-label="Divide">÷</button>
+            <!-- Row 2 -->
+            <button id="btn-7" class="btn" data-key="7" aria-label="Seven">7</button>
+            <button id="btn-8" class="btn" data-key="8" aria-label="Eight">8</button>
+            <button id="btn-9" class="btn" data-key="9" aria-label="Nine">9</button>
+            <button id="btn-multiply" class="btn operator" data-key="*" aria-label="Multiply">×</button>
+            <!-- Row 3 -->
+            <button id="btn-4" class="btn" data-key="4" aria-label="Four">4</button>
+            <button id="btn-5" class="btn" data-key="5" aria-label="Five">5</button>
+            <button id="btn-6" class="btn" data-key="6" aria-label="Six">6</button>
+            <button id="btn-subtract" class="btn operator" data-key="-" aria-label="Subtract">−</button>
+            <!-- Row 4 -->
+            <button id="btn-1" class="btn" data-key="1" aria-label="One">1</button>
+            <button id="btn-2" class="btn" data-key="2" aria-label="Two">2</button>
+            <button id="btn-3" class="btn" data-key="3" aria-label="Three">3</button>
+            <button id="btn-add" class="btn operator" data-key="+" aria-label="Add">+</button>
+            <!-- Row 5 -->
+            <button id="btn-0" class="btn" data-key="0" aria-label="Zero" style="grid-column: span 2;">0</button>
+            <button id="btn-decimal" class="btn" data-key="." aria-label="Decimal point">.</button>
+            <button id="btn-equals" class="btn equals" data-key="Enter" aria-label="Equals">=</button>
+        </div>
+    </div>
+</body>
+</html>

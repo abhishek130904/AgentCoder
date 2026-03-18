@@ -1,7 +1,6 @@
-import { useState } from "react"
+import { Suspense, lazy, useState } from "react"
 import PromptBox from "./components/PromptBox"
 import FileExplorer from "./components/FileExp"
-import CodeViewer from "./components/CodeViewer"
 import "./App.css"
 
 import {
@@ -10,6 +9,8 @@ import {
   getFileContent,
   downloadProject
 } from "./api/api"
+
+const CodeViewer = lazy(() => import("./components/CodeViewer"))
 
 const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms))
@@ -222,10 +223,18 @@ function App() {
               isLoading={isGenerating && !hasFiles}
             />
 
-            <CodeViewer
-              code={code}
-              fileName={selectedFile || undefined}
-            />
+            <Suspense
+              fallback={
+                <div className="code-empty">
+                  <p>Loading code viewer…</p>
+                </div>
+              }
+            >
+              <CodeViewer
+                code={code}
+                fileName={selectedFile || undefined}
+              />
+            </Suspense>
           </div>
         </section>
       </main>

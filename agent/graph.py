@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 from langchain_core.globals import set_verbose, set_debug
 from langchain_groq.chat_models import ChatGroq
@@ -11,10 +13,15 @@ from agent.tools import write_file, read_file, get_current_directory, list_files
 
 _ = load_dotenv()
 
-set_debug(True)
-set_verbose(True)
+debug_enabled = os.getenv("AGENT_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+set_debug(debug_enabled)
+set_verbose(debug_enabled)
 
-llm = ChatGroq(model="openai/gpt-oss-120b")
+model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+llm = ChatGroq(model=model_name)
+
+coder_tools = [read_file, write_file, list_files, get_current_directory]
+react_agent = create_react_agent(llm, coder_tools)
 
 
 def planner_agent(state: dict) -> dict:
@@ -62,9 +69,6 @@ def coder_agent(state: dict) -> dict:
         f"Existing content:\n{existing_content}\n"
         "Use write_file(path, content) to save your changes."
     )
-
-    coder_tools = [read_file, write_file, list_files, get_current_directory]
-    react_agent = create_react_agent(llm, coder_tools)
 
     react_agent.invoke({"messages": [{"role": "system", "content": system_prompt},
                                      {"role": "user", "content": user_prompt}]})

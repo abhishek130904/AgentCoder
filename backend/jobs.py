@@ -5,7 +5,6 @@ from agent.tools import set_job_root
 jobs = {}
 
 def run_agent(job_id: str, prompt: str):
-
     try:
         jobs[job_id]["status"] = "running"
 
