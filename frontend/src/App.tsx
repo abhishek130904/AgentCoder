@@ -5,6 +5,7 @@ import "./App.css"
 
 import {
   createProject,
+  getStatus,
   getFiles,
   getFileContent,
   downloadProject
@@ -50,36 +51,62 @@ function App() {
       }
 
       setJobId(id)
-      setStatusMessage("Generating project files...")
+      setStatusMessage("Planning and generating the project…")
 
-      // Poll for files a few times instead of a single fixed timeout
-      const maxAttempts = 8
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-          const filesRes = await getFiles(id)
-          const list: string[] = filesRes.data.files || []
+      // Poll backend status + files until job completes or fails.
+      const maxPollMs = 90_000
+      const intervalMs = 2_000
+      let elapsed = 0
 
-          if (list.length > 0) {
-            setFiles(list)
-            setStatusMessage("Project ready. Pick a file on the left.")
-            return
-          }
-        } catch {
-          // Ignore and retry – backend may still be working
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        const [statusRes, filesRes] = await Promise.all([
+          getStatus(id).catch(() => null),
+          getFiles(id).catch(() => null)
+        ])
+
+        const jobStatus = statusRes?.data?.status as
+          | "pending"
+          | "running"
+          | "completed"
+          | "failed"
+          | undefined
+
+        const list: string[] = (filesRes?.data?.files as string[]) || []
+
+        if (list.length > 0) {
+          setFiles((prev) => {
+            const merged = new Set([...prev, ...list])
+            return Array.from(merged).sort()
+          })
         }
 
-        if (attempt < maxAttempts) {
+        if (jobStatus === "failed") {
+          const message =
+            (statusRes?.data?.error as string) ||
+            "The generator failed while creating the project."
+          setError(message)
+          setStatusMessage("Generation failed. Adjust your prompt and try again.")
+          break
+        }
+
+        if (jobStatus === "completed") {
+          setStatusMessage("Project ready. Pick a file on the left.")
+          break
+        }
+
+        elapsed += intervalMs
+        if (elapsed >= maxPollMs) {
           setStatusMessage(
-            `Generating project files (attempt ${attempt + 1}/${maxAttempts})...`
+            "The generator is still working. You can wait a bit longer or try a simpler prompt."
           )
-          // eslint-disable-next-line no-await-in-loop
-          await sleep(1500)
+          break
         }
-      }
 
-      setStatusMessage(
-        "The generator is still working. Try again in a few seconds."
-      )
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(intervalMs)
+      }
     } catch (err) {
       console.error(err)
       setError(
