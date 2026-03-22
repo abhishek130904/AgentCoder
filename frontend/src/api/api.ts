@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API = axios.create({
-  baseURL: "/api"
+  baseURL: "https://agentcoder-jz61.onrender.com/api"
 })
 
 export const createProject = (prompt: string) =>
@@ -17,4 +17,4 @@ export const getFileContent = (jobId: string, path: string) =>
   API.get(`/projects/${jobId}/files/${path}`)
 
 export const downloadProject = (jobId: string) =>
-  `/api/projects/${jobId}/download`
+  `https://agentcoder-jz61.onrender.com/api/projects/${jobId}/download`
