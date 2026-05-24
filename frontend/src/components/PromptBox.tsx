@@ -8,8 +8,11 @@ interface Props {
 export default function PromptBox({ onSubmit, disabled }: Props) {
   const [prompt, setPrompt] = useState("")
 
+  const trimmedPrompt = prompt.trim()
+  const isValidLength = trimmedPrompt.length >= 10 && trimmedPrompt.length <= 2000
+
   const handleSubmit = () => {
-    if (!prompt.trim() || disabled) return
+    if (!isValidLength || disabled) return
     onSubmit(prompt)
   }
 
@@ -34,12 +37,24 @@ export default function PromptBox({ onSubmit, disabled }: Props) {
 
       <div className="prompt-actions">
         <span className="prompt-hint">
-          Press <code>Ctrl ⌃ / Cmd ⌘ + Enter</code> to generate.
+          {trimmedPrompt.length > 0 && trimmedPrompt.length < 10 && (
+            <span style={{ color: "#f87171", marginRight: "8px", fontWeight: 500 }}>
+              Prompt is too short (min 10 chars, current: {trimmedPrompt.length})
+            </span>
+          )}
+          {trimmedPrompt.length > 2000 && (
+            <span style={{ color: "#f87171", marginRight: "8px", fontWeight: 500 }}>
+              Prompt is too long (max 2000 chars, current: {trimmedPrompt.length})
+            </span>
+          )}
+          {!disabled && isValidLength && (
+            <span>Press <code>Ctrl ⌃ / Cmd ⌘ + Enter</code> to generate.</span>
+          )}
         </span>
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={disabled || !prompt.trim()}
+          disabled={disabled || !isValidLength}
         >
           {disabled ? "Generating..." : "Generate project"}
         </button>

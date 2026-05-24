@@ -107,11 +107,18 @@ function App() {
         // eslint-disable-next-line no-await-in-loop
         await sleep(intervalMs)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      setError(
-        "Something went wrong while generating the project. Please try again."
-      )
+      let msg = "Something went wrong while generating the project. Please try again."
+      if (err.response?.status === 422 && err.response?.data?.detail) {
+        const details = err.response.data.detail
+        if (Array.isArray(details) && details.length > 0) {
+          msg = `Validation Error: ${details.map((d: any) => d.msg).join(", ")}`
+        } else if (typeof details === "string") {
+          msg = `Validation Error: ${details}`
+        }
+      }
+      setError(msg)
       setStatusMessage("We could not complete the last request.")
     } finally {
       setIsGenerating(false)

@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import re
 from typing import TypedDict, Optional
 
 from dotenv import load_dotenv
@@ -72,26 +74,70 @@ class AgentState(TypedDict, total=False):
     review_attempts: int
 
 
+def _extract_json_from_text(text: str) -> dict:
+    """Extract a JSON object from LLM text that may contain markdown fences or prose."""
+    # Try to find a JSON code block first
+    match = re.search(r"```(?:json)?\s*\n?(\{.*?})\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+    # Try to find a raw JSON object
+    match = re.search(r"(\{.*})", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+    raise ValueError("No JSON object found in LLM response")
+
+
+def _invoke_with_structured_output_fallback(model, schema_cls, prompt, agent_name: str):
+    """Try structured output first; on tool_use_failed errors, fall back to raw JSON parsing."""
+    # Attempt 1: structured output via tool-calling
+    try:
+        resp = model.with_structured_output(schema_cls).invoke(prompt)
+        if resp is not None:
+            return resp
+    except Exception as e:
+        error_str = str(e)
+        if "tool_use_failed" in error_str or "did not call a tool" in error_str:
+            logger.warning(
+                "%s structured output failed (tool_use_failed), trying JSON fallback...",
+                agent_name,
+            )
+        else:
+            raise
+
+    # Attempt 2: ask the LLM to return raw JSON and parse it ourselves
+    json_instruction = (
+        f"{prompt}\n\n"
+        f"IMPORTANT: You MUST respond with ONLY a valid JSON object matching this schema, "
+        f"no explanations or markdown:\n{schema_cls.model_json_schema()}"
+    )
+    raw_resp = model.invoke(json_instruction)
+    raw_text = raw_resp.content if hasattr(raw_resp, "content") else str(raw_resp)
+
+    try:
+        parsed = _extract_json_from_text(raw_text)
+        return schema_cls.model_validate(parsed)
+    except Exception as parse_err:
+        logger.error("%s JSON fallback also failed: %s", agent_name, parse_err)
+        raise ValueError(
+            f"{agent_name} did not return a valid response after retries."
+        ) from parse_err
+
+
 def planner_agent(state: dict) -> dict:
     """Converts user prompt into a structured Plan."""
     user_prompt = state["user_prompt"]
-    resp = llm.with_structured_output(Plan).invoke(
-        planner_prompt(user_prompt)
+    resp = _invoke_with_structured_output_fallback(
+        llm, Plan, planner_prompt(user_prompt), "Planner"
     )
-    if resp is None:
-        raise ValueError("Planner did not return a valid response.")
     return {"plan": resp}
 
 
 def architect_agent(state: dict) -> dict:
     """Creates TaskPlan from Plan."""
     plan: Plan = state["plan"]
-    resp = llm.with_structured_output(TaskPlan).invoke(
-        architect_prompt(plan=plan.model_dump_json())
+    resp = _invoke_with_structured_output_fallback(
+        llm, TaskPlan, architect_prompt(plan=plan.model_dump_json()), "Architect"
     )
-    if resp is None:
-        # BUG-10 FIX: Error message said "Planner" but this is the Architect.
-        raise ValueError("Architect did not return a valid response.")
 
     resp.plan = plan
     # BUG-11 FIX: Replaced print() with logging.debug() — no more stdout noise in production.
@@ -165,8 +211,10 @@ def reviewer_agent(state: dict) -> dict:
         logger.info("Reviewer output: %s", last_message[:500])
 
         # Attempt structured output for pass/fail decision
-        review_resp = llm.with_structured_output(ReviewResult).invoke(
-            f"Based on this code review, produce a structured ReviewResult:\n\n{last_message}"
+        review_resp = _invoke_with_structured_output_fallback(
+            llm, ReviewResult,
+            f"Based on this code review, produce a structured ReviewResult:\n\n{last_message}",
+            "Reviewer",
         )
         if review_resp is not None:
             return {
