@@ -35,8 +35,8 @@ app.include_router(router, prefix="/api")
 
 
 # Health check endpoint for Render (and other hosting platforms).
-# Render pings GET / or HEAD / to verify the service is alive.
-@app.get("/health")
+# Render pings GET /health or HEAD /health to verify the service is alive.
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok"}
 
@@ -75,7 +75,7 @@ if FRONTEND_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
     # Catch-all: serve index.html for any non-API route (supports React client-side routing)
-    @app.get("/{full_path:path}")
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_spa(full_path: str):
         # If the exact file exists in dist, serve it (e.g. favicon, manifest)
         file_path = FRONTEND_DIR / full_path
