@@ -1,10 +1,13 @@
 import axios from "axios"
 
-// BUG-13 FIX: Use environment variable for API URL, falling back to "/api"
-// which works with the Vite proxy in development. The old hardcoded
-// production URL meant local development always hit production.
+// Use environment variable for API URL.
+// - In local dev: Vite proxy handles "/api" → http://127.0.0.1:8000
+// - In production (Vercel): falls back to the Render backend URL
+const API_BASE = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? "/api" : "https://agentcoder-jz61.onrender.com/api")
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api"
+  baseURL: API_BASE,
 })
 
 export const createProject = (prompt: string) =>
@@ -20,6 +23,5 @@ export const getFileContent = (jobId: string, path: string) =>
   API.get(`/projects/${jobId}/files/${path}`)
 
 export const downloadProject = (jobId: string) => {
-  const base = import.meta.env.VITE_API_URL || "/api"
-  return `${base}/projects/${jobId}/download`
+  return `${API_BASE}/projects/${jobId}/download`
 }
