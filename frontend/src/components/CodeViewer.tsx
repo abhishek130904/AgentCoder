@@ -52,6 +52,7 @@ function inlineHtml(html: string, fileContents: Record<string, string>): string 
 
 export default function CodeViewer({ code, fileName, fileContents = {} }: Props) {
   const [tab, setTab] = useState<"code" | "preview">("code")
+  const [previewUrl, setPreviewUrl] = useState<string>("")
   const language = guessLanguage(fileName)
   const isHtml = language === "html"
 
@@ -59,6 +60,22 @@ export default function CodeViewer({ code, fileName, fileContents = {} }: Props)
   useEffect(() => {
     setTab("code")
   }, [fileName])
+
+  // Fix the render-revoke cycle bug: create/revoke URL inside useEffect
+  useEffect(() => {
+    if (isHtml && tab === "preview" && code) {
+      const processedHtml = inlineHtml(code, fileContents)
+      const blob = new Blob([processedHtml], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
+      setPreviewUrl(url)
+
+      return () => {
+        URL.revokeObjectURL(url)
+      }
+    } else {
+      setPreviewUrl("")
+    }
+  }, [isHtml, tab, code, fileContents])
 
   if (!code && !fileName) {
     return (
@@ -76,54 +93,23 @@ export default function CodeViewer({ code, fileName, fileContents = {} }: Props)
     )
   }
 
-  // Construct preview URL if HTML
-  let previewUrl = ""
-  if (isHtml && tab === "preview") {
-    const processedHtml = inlineHtml(code, fileContents)
-    const blob = new Blob([processedHtml], { type: "text/html" })
-    previewUrl = URL.createObjectURL(blob)
-  }
-
-  // Cleanup blob URL on unmount or change
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-  }, [previewUrl])
-
   return (
     <div className="code-viewer">
       {fileName && (
         <div className="code-header">
           <span className="code-filename">{fileName}</span>
           {isHtml && (
-            <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ display: "flex", gap: "6px" }}>
               <button
                 type="button"
-                style={{
-                  padding: "3px 8px",
-                  fontSize: "11px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border)",
-                  background: tab === "code" ? "var(--accent)" : "transparent",
-                  color: tab === "code" ? "#fff" : "var(--text)",
-                }}
+                className={`code-header-tab ${tab === "code" ? "active" : ""}`}
                 onClick={() => setTab("code")}
               >
                 💻 Code
               </button>
               <button
                 type="button"
-                style={{
-                  padding: "3px 8px",
-                  fontSize: "11px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border)",
-                  background: tab === "preview" ? "var(--accent)" : "transparent",
-                  color: tab === "preview" ? "#fff" : "var(--text)",
-                }}
+                className={`code-header-tab ${tab === "preview" ? "active" : ""}`}
                 onClick={() => setTab("preview")}
               >
                 👁️ Preview
@@ -134,18 +120,44 @@ export default function CodeViewer({ code, fileName, fileContents = {} }: Props)
       )}
 
       {tab === "preview" && previewUrl ? (
-        <iframe
-          src={previewUrl}
-          title="Live HTML Preview"
-          sandbox="allow-scripts"
-          style={{
-            width: "100%",
-            height: "500px",
-            border: "none",
-            borderRadius: "8px",
-            background: "#ffffff",
-          }}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div className="preview-toolbar">
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                className="preview-btn"
+                onClick={() => setTab("code")}
+              >
+                ⬅️ Back to Code
+              </button>
+              <button
+                type="button"
+                className="preview-btn"
+                onClick={() => {
+                  // Force a reload by clearing and rebuilding the blob
+                  const currentUrl = previewUrl
+                  setPreviewUrl("")
+                  setTimeout(() => setPreviewUrl(currentUrl), 50)
+                }}
+              >
+                🔄 Reload Preview
+              </button>
+            </div>
+            <span style={{ opacity: 0.6, fontSize: "11px" }}>Sandboxed Live Preview</span>
+          </div>
+          <iframe
+            src={previewUrl}
+            title="Live HTML Preview"
+            sandbox="allow-scripts"
+            style={{
+              width: "100%",
+              height: "500px",
+              border: "none",
+              borderRadius: "8px",
+              background: "#ffffff",
+            }}
+          />
+        </div>
       ) : (
         <Editor
           height="500px"
