@@ -11,6 +11,18 @@ type TreeNode = {
   children?: TreeNode[]
 }
 
+function getFileIcon(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase()
+  const icons: Record<string, string> = {
+    js: "🟨", jsx: "⚛️", ts: "🔷", tsx: "⚛️",
+    py: "🐍", html: "🌐", css: "🎨", json: "📋",
+    md: "📝", txt: "📄", svg: "🖼️", yml: "⚙️",
+    yaml: "⚙️", toml: "⚙️", env: "🔒", gitignore: "🙈",
+    lock: "🔒", sh: "⬛", bat: "⬛", sql: "🗃️",
+  }
+  return icons[ext || ""] || "📄"
+}
+
 function buildTree(files: string[]): TreeNode[] {
   const root: Record<string, TreeNode> = {}
 
@@ -25,10 +37,12 @@ function buildTree(files: string[]): TreeNode[] {
         currentLevel[part] = {
           name: part,
           path: accumulated,
-          children: index === parts.length - 1 ? undefined : {}
+          children: index === parts.length - 1 ? undefined : {},
         } as TreeNode & { children: Record<string, TreeNode> }
       }
-      const node = currentLevel[part] as TreeNode & { children?: Record<string, TreeNode> }
+      const node = currentLevel[part] as TreeNode & {
+        children?: Record<string, TreeNode>
+      }
       if (node.children && index < parts.length - 1) {
         currentLevel = node.children
       }
@@ -38,15 +52,24 @@ function buildTree(files: string[]): TreeNode[] {
   const toArray = (nodes: Record<string, TreeNode>): TreeNode[] =>
     Object.values(nodes)
       .map((n) => {
-        const maybeChildren = (n as TreeNode & { children?: Record<string, TreeNode> }).children
+        const maybeChildren = (
+          n as TreeNode & { children?: Record<string, TreeNode> }
+        ).children
         if (!maybeChildren) return { name: n.name, path: n.path }
         return {
           name: n.name,
           path: n.path,
-          children: toArray(maybeChildren)
+          children: toArray(maybeChildren),
         }
       })
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => {
+        // Folders first, then files
+        const aIsDir = a.children && a.children.length > 0
+        const bIsDir = b.children && b.children.length > 0
+        if (aIsDir && !bIsDir) return -1
+        if (!aIsDir && bIsDir) return 1
+        return a.name.localeCompare(b.name)
+      })
 
   return toArray(root)
 }
@@ -54,7 +77,7 @@ function buildTree(files: string[]): TreeNode[] {
 function FileTree({
   nodes,
   selectedFile,
-  onSelect
+  onSelect,
 }: {
   nodes: TreeNode[]
   selectedFile?: string | null
@@ -75,7 +98,7 @@ function FileTree({
                 onClick={() => onSelect(node.path)}
                 title={node.path}
               >
-                <span className="file-icon file-icon-file" />
+                <span className="file-icon">{getFileIcon(node.name)}</span>
                 <span className="file-name">{node.name}</span>
               </button>
             </li>
@@ -83,12 +106,9 @@ function FileTree({
         }
 
         return (
-          <li
-            key={node.path}
-            className="file-folder"
-          >
+          <li key={node.path} className="file-folder">
             <div className="file-folder-header">
-              <span className="file-icon file-icon-folder" />
+              <span className="file-icon">📁</span>
               <span className="file-name">{node.name}</span>
             </div>
             {node.children && node.children.length > 0 && (
@@ -109,7 +129,7 @@ export default function FileExplorer({
   files,
   onSelect,
   selectedFile,
-  isLoading
+  isLoading,
 }: Props) {
   const hasFiles = files.length > 0
   const tree = hasFiles ? buildTree(files) : []
@@ -127,7 +147,12 @@ export default function FileExplorer({
 
       <div className="file-explorer-body">
         {isLoading && !hasFiles && (
-          <div className="file-empty">Generating files…</div>
+          <div style={{ padding: "8px 0" }}>
+            <div className="skeleton skeleton-line" />
+            <div className="skeleton skeleton-line" />
+            <div className="skeleton skeleton-line" />
+            <div className="skeleton skeleton-line" />
+          </div>
         )}
 
         {!isLoading && !hasFiles && (

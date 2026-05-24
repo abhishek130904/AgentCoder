@@ -9,6 +9,7 @@ or a real database, but JSON-file is a pragmatic choice for a demo project.
 import json
 import pathlib
 import threading
+import time
 import uuid
 from typing import Optional
 
@@ -68,6 +69,12 @@ def create_job(prompt: str) -> str:
         jobs[job_id] = {
             "status": "pending",
             "prompt": prompt,
+            "stage": "pending",
+            "coding_step": 0,
+            "coding_total": 0,
+            "plan": None,
+            "started_at": time.time(),
+            "completed_at": None,
         }
         _save_jobs(jobs)
     return job_id
@@ -76,16 +83,26 @@ def create_job(prompt: str) -> str:
 def run_agent(job_id: str, prompt: str) -> None:
     """Execute the multi-agent pipeline for a job (called as a background task)."""
     try:
-        _update_job(job_id, {"status": "running"})
+        _update_job(job_id, {"status": "running", "stage": "planning"})
 
         set_job_root(job_id)
 
+        # Pass job_id so agents can update stage progress via the callback
         result = agent.invoke(
-            {"user_prompt": prompt},
+            {"user_prompt": prompt, "job_id": job_id},
             {"recursion_limit": 100},
         )
 
-        _update_job(job_id, {"status": "completed"})
+        _update_job(job_id, {
+            "status": "completed",
+            "stage": "done",
+            "completed_at": time.time(),
+        })
 
     except Exception as e:
-        _update_job(job_id, {"status": "failed", "error": str(e)})
+        _update_job(job_id, {
+            "status": "failed",
+            "stage": "failed",
+            "error": str(e),
+            "completed_at": time.time(),
+        })

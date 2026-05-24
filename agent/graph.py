@@ -66,12 +66,25 @@ MAX_REVIEW_ATTEMPTS = 2
 # Catches key typos at development time and makes the state flow self-documenting.
 class AgentState(TypedDict, total=False):
     user_prompt: str
+    job_id: str
     plan: Plan
     task_plan: TaskPlan
     coder_state: CoderState
     status: str
     review_result: Optional[ReviewResult]
     review_attempts: int
+
+
+def _notify_stage(state: dict, stage: str, **extra) -> None:
+    """Update the job store with the current pipeline stage (fire-and-forget)."""
+    job_id = state.get("job_id")
+    if not job_id:
+        return
+    try:
+        from backend.jobs import _update_job
+        _update_job(job_id, {"stage": stage, **extra})
+    except Exception:
+        pass  # Non-critical — don't crash the pipeline over a status update
 
 
 def _extract_json_from_text(text: str) -> dict:
@@ -125,21 +138,27 @@ def _invoke_with_structured_output_fallback(model, schema_cls, prompt, agent_nam
 
 def planner_agent(state: dict) -> dict:
     """Converts user prompt into a structured Plan."""
+    _notify_stage(state, "planning")
     user_prompt = state["user_prompt"]
     resp = _invoke_with_structured_output_fallback(
         llm, Plan, planner_prompt(user_prompt), "Planner"
     )
+    # Persist the plan summary so the frontend can show a Plan Preview card
+    _notify_stage(state, "planning_done", plan=resp.model_dump())
     return {"plan": resp}
 
 
 def architect_agent(state: dict) -> dict:
     """Creates TaskPlan from Plan."""
+    _notify_stage(state, "architecting")
     plan: Plan = state["plan"]
     resp = _invoke_with_structured_output_fallback(
         llm, TaskPlan, architect_prompt(plan=plan.model_dump_json()), "Architect"
     )
 
     resp.plan = plan
+    total_steps = len(resp.implementation_steps)
+    _notify_stage(state, "architecting_done", coding_total=total_steps)
     # BUG-11 FIX: Replaced print() with logging.debug() — no more stdout noise in production.
     logger.debug("Architect response: %s", resp.model_dump_json())
     return {"task_plan": resp}
@@ -153,9 +172,13 @@ def coder_agent(state: dict) -> dict:
 
     steps = coder_state.task_plan.implementation_steps
     if coder_state.current_step_idx >= len(steps):
+        _notify_stage(state, "reviewing")
         return {"coder_state": coder_state, "status": "CODING_DONE"}
 
     current_task = steps[coder_state.current_step_idx]
+    step_num = coder_state.current_step_idx + 1
+    total = len(steps)
+    _notify_stage(state, "coding", coding_step=step_num, coding_total=total)
 
     # BUG-09 FIX: Use .invoke() instead of deprecated .run().
     existing_content = read_file.invoke(current_task.filepath)
