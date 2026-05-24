@@ -1,10 +1,12 @@
 import asyncio
 import json
 import os
+import pathlib
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.routes import router
 from backend.jobs import get_job
@@ -32,6 +34,13 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 
+# Health check endpoint for Render (and other hosting platforms).
+# Render pings GET / or HEAD / to verify the service is alive.
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 # IMP-03: Server-Sent Events endpoint for real-time status updates.
 # Replaces the need for frontend polling every 2 seconds.
 @app.get("/api/projects/{job_id}/stream")
@@ -51,3 +60,26 @@ async def stream_status(job_id: str):
             await asyncio.sleep(1)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Serve the React frontend in production.
+# After `npm run build` in frontend/, the output lands in frontend/dist/.
+# Mount it as static files so the entire app is served from one process.
+# This MUST come after all /api routes to avoid shadowing them.
+# ---------------------------------------------------------------------------
+FRONTEND_DIR = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIR.is_dir():
+    # Serve JS/CSS/assets at /assets/...
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+
+    # Catch-all: serve index.html for any non-API route (supports React client-side routing)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # If the exact file exists in dist, serve it (e.g. favicon, manifest)
+        file_path = FRONTEND_DIR / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(file_path)
+        # Otherwise fall back to index.html for client-side routing
+        return FileResponse(FRONTEND_DIR / "index.html")
