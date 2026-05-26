@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/screenshots/hero.png" alt="CoderBuddy — AI-Powered Code Generator" width="100%" />
-</p>
-
 <h1 align="center">🤖 CoderBuddy</h1>
 
 <p align="center">
