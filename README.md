@@ -496,7 +496,7 @@ Contributions are welcome! Here's how to get started:
 - [ ] Multi-file diff view in the code viewer
 - [ ] User authentication and project history
 
-
+---
 
 <p align="center">
   <strong>Built with ❤️ using LangGraph, FastAPI, and React</strong>
